@@ -1,93 +1,113 @@
-import { Link } from "react-router-dom";
-import ResturantCards, {
-  withPromotedLabel,
-} from "../components/ResturantCards.js";
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+
+import RestaurantCard, {
+  withPromotedLabel,
+} from "../components/ResturantCard";
 import useOnlineStatus from "../utils/useOnlineStatus";
+import { colors } from "../ui-tokens";
 
 const Body = () => {
-  const [listOfResturants, setListOfResturants] = useState([]);
-  const [filteredResturant, setFilteredResturant] = useState([]);
+  const [listOfRestaurants, setListOfRestaurants] = useState([]);
+  const [filteredRestaurants, setFilteredRestaurants] = useState([]);
+  const [searchText, setSearchText] = useState("");
 
-  const [searchText, setSearchText] = useState([""]);
+  // HOC for promoted flag
+  const RestaurantCardPromoted = withPromotedLabel(RestaurantCard);
 
-  const ResturantCardPromoted = withPromotedLabel(ResturantCards);
-
+  /* ------------------- data fetch ------------------- */
   useEffect(() => {
+    const fetchData = async () => {
+      const res = await fetch(
+        "https://www.swiggy.com/dapi/restaurants/list/v5?lat=12.9031138&lng=77.6413963&is-seo-homepage-enabled=true&page_type=DESKTOP_WEB_LISTING"
+      );
+      const json = await res.json();
+      const restaurants =
+        json?.data?.cards?.[4]?.card?.card?.gridElements?.infoWithStyle
+          ?.restaurants || [];
+      setListOfRestaurants(restaurants);
+      setFilteredRestaurants(restaurants);
+    };
     fetchData();
   }, []);
 
-  const fetchData = async () => {
-    const response = await fetch(
-      "https://www.swiggy.com/dapi/restaurants/list/v5?lat=12.9031138&lng=77.6413963&is-seo-homepage-enabled=true&page_type=DESKTOP_WEB_LISTING"
+  /* ------------------- offline check ------------------- */
+  const onlineStatus = useOnlineStatus();
+  if (!onlineStatus) {
+    return (
+      <main className="page flex h-[60vh] items-center justify-center">
+        <p className="text-lg font-semibold">
+          ⚠️ Menu is not available offline.
+        </p>
+      </main>
     );
-    const json = await response.json();
-    setListOfResturants(
-      json?.data?.cards[4]?.card?.card?.gridElements?.infoWithStyle?.restaurants
-    );
-    setFilteredResturant(
-      json?.data?.cards[4]?.card?.card?.gridElements?.infoWithStyle?.restaurants
+  }
+
+  /* ------------------- handlers ------------------- */
+  const handleSearch = () => {
+    const q = searchText.trim().toLowerCase();
+    setFilteredRestaurants(
+      listOfRestaurants.filter((r) =>
+        r.info?.name?.toLowerCase().includes(q)
+      )
     );
   };
 
-  const onlineStatus = useOnlineStatus();
-  if (onlineStatus === false) {
-    return <div>Menu is not available in offline mode.</div>;
-  }
+  const handleTopRated = () => {
+    setFilteredRestaurants(
+      listOfRestaurants.filter((r) => (r.info.avgRating || 0) >= 4.4)
+    );
+  };
 
+  /* ------------------- render ------------------- */
   return (
-    <div className="body">
-      <div className="filter flex">
-        <div className="search m-4 p-4">
-          <input
-            className=" border border-black"
-            type="text"
-            value={searchText}
-            onChange={(e) => {
-              setSearchText(e.target.value);
-            }}
-          />
-          <button
-            className="px-4 py-2 bg-green-100 m-4 rounded-lg"
-            onClick={() => {
-              const filteredData = listOfResturants.filter((res) =>
-                res.info.name.toLowerCase().includes(searchText.toLowerCase())
-              );
-              setFilteredResturant(filteredData);
-            }}
-          >
-            Search
-          </button>
-        </div>
-        <div className="search m-4 p-4 flex items-center">
-          <button
-            className="px-4 py-2 bg-green-100 rounded-lg"
-            onClick={() => {
-              const filteredList = listOfResturants.filter(
-                (res) => res.info.avgRating >= 4.4
-              );
-              setListOfResturants(filteredList);
-            }}
-          >
-            Top Rated Resturant
-          </button>
-        </div>
-      </div>
-      <div className="flex flex-wrap">
-        {filteredResturant.map((restaurant) => (
-          <Link
-            key={restaurant.info.id}
-            to={"/restaurants/" + restaurant.info.id}
-          >
-            {restaurant.info.promoted ? (
-              <ResturantCardPromoted resData={restaurant} />
-            ) : (
-              <ResturantCards resData={restaurant} />
-            )}
-          </Link>
-        ))}
-      </div>
-    </div>
+    <main className="page">
+      {/* ▸ search + filter bar */}
+      <section className="section flex flex-wrap items-center gap-4">
+        <input
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="Search restaurants…"
+          className="min-w-[180px] flex-1 rounded-lg border border-gray-300 px-4 py-2
+                     shadow-sm focus:border-indigo-500 focus:outline-none"
+        />
+
+        <button
+          onClick={handleSearch}
+          className={`rounded-lg bg-${colors.brand} px-4 py-2 text-white
+                      hover:bg-${colors.brandHover}`}
+        >
+          Search
+        </button>
+
+        <button
+          onClick={handleTopRated}
+          className="rounded-lg bg-emerald-100 px-4 py-2 text-emerald-800 hover:bg-emerald-200"
+        >
+          ⭐ Top Rated
+        </button>
+      </section>
+
+      {/* ▸ grid of restaurant cards */}
+      <section
+        className="grid gap-6 pb-10
+                   sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      >
+        {filteredRestaurants.map((restaurant) => {
+          const Card = restaurant.info.promoted
+            ? RestaurantCardPromoted
+            : RestaurantCard;
+          return (
+            <Link
+              key={restaurant.info.id}
+              to={`/restaurants/${restaurant.info.id}`}
+            >
+              <Card resData={restaurant} />
+            </Link>
+          );
+        })}
+      </section>
+    </main>
   );
 };
 
